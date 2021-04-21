@@ -35,14 +35,17 @@ io.on('connection', (socket) => {
     const messageData = JSON.parse(data)
     const messageContent = messageData.messageContent
     const roomName = messageData.roomName
+	const messageTime = messageData.messageTime
+	userName = messageData.userName
 
     const chatData = {
       userName : userName,
       messageContent : messageContent,
-      roomName : roomName
+      roomName : roomName,
+	  messageTime : messageTime
     }
 
-    socket.broadcast.emit('updateChat',JSON.stringify(chatData))
+    socket.to(roomName).emit('updateChat',JSON.stringify(chatData))
 
     // we tell the client to execute 'new message'
     // socket.broadcast.emit('updateChat',{
@@ -51,15 +54,16 @@ io.on('connection', (socket) => {
     //   roomName: data.roomName
     // });
 	
-	console.log('message: %s', data);
+	console.log('message: %s', data);	
   });
 
   // when the client emits 'add user', this listens and executes
-  socket.on('add user', (username) => {
+  socket.on('add user', (username, roomName) => {
     if (addedUser) return;
 
     // we store the username in the socket session for this client
     socket.username = username;
+    socket.join(roomName);
     ++numUsers;
     addedUser = true;
     socket.emit('login', {
@@ -67,7 +71,7 @@ io.on('connection', (socket) => {
     });
     // echo globally (all clients) that a person has connected
     socket.broadcast.emit('user joined', {
-      username: socket.username,
+      userName: socket.username,
       numUsers: numUsers
     });
   });
@@ -91,9 +95,11 @@ io.on('connection', (socket) => {
     if (addedUser) {
       --numUsers;
 
+	console.log('client disconnected from the server!');
+
       // echo globally that this client has left
       socket.broadcast.emit('user left', {
-        username: socket.username,
+        userName: socket.username,
         numUsers: numUsers
       });
     }
