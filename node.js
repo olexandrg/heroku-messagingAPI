@@ -1,101 +1,162 @@
-
-// Setup basic express server
 const express = require('express');
-const app = express();
-const path = require('path');
-const server = require('http').createServer(app);
-const io = require('socket.io')(server);
-const port = process.env.PORT || 3000;
+const randomId = require('random-id');
+const app = express(),
+      bodyParser = require("body-parser");
+      port = 3070;
 
-const bodyParser = require('body-parser');
-app.use(bodyParser.urlencoded({ extended: true }));
+// place holder for the data
+// leave this const alone for now
+const users = [
+  {
+    id: "1",
+    firstName: "first1",
+    lastName: "last1",
+    email: "abc@gmail.com"
+  },
+  {
+    id: "2",
+    firstName: "first2",
+    lastName: "last2",
+    email: "abc@gmail.com"
+  },
+  {
+    id: "3",
+    firstName: "first3",
+    lastName: "last3",
+    email: "abc@gmail.com"
+  }
+];
+
+// leave this alone; default users data will be deleted later
 app.use(bodyParser.json());
+app.use(express.static(process.cwd() + '/my-app/dist'));
 
-server.listen(port, () => {
-  console.log('Server listening at port %d', port);
+app.get('/api/users', (req, res) => {
+  console.log('api/users called')
+  res.json(users);
 });
 
-// Routing
-app.use(express.static(path.join(__dirname, 'public')));
+app.post('/api/user', (req, res) => {
+  const user = req.body.user;
+  user.id = randomId(10);
+  console.log('Adding user:::::', user);
+  users.push(user);
+  res.json("user addedd");
+});
 
-// Chatroom
+// placeholder for factory tools
+const tools = [
+  {
+    bin: "MFG133A",
+    customer: "TSMC",
+    type: "Sabre 3D",
+    sn: "001"
+  },
+  {
+    bin: "MFG134B",
+    customer: "Intel",
+    type: "Gamma XPR",
+    sn: "335"
+  }
+];
 
-let numUsers = 0;
+app.get('/api/tools', (req, res) => {
+  console.log('api/tools called')
+  res.json(tools);
+});
 
-io.on('connection', (socket) => {
+// placeholder for error reports
 
-  var userName = '';
+const reports = [
+  {
+    bin: "MFG133A",
+    fault: "Sample fault report.",
+    status: "Review Required",
+    dateAdded: "2021-11-20"
+  }
+]
 
-  let addedUser = false;
-  console.log('client connected to the server!');
+app.get('/api/reports', (req, res) => {
+  console.log('api/reports called')
+  res.json(reports);
+});
 
-  // when the client emits 'new message', this listens and executes
-  socket.on('new message', (data) => {
-    
-    const messageData = JSON.parse(data)
-    const messageContent = messageData.messageContent
-    const roomName = messageData.roomName
+app.post('/api/reports', (req, res) => {
+  const report = req.body.report;
+  console.log('Adding report: ', report);
+  try {
+    reports.push(report);
+    res.json("success");
+  }
+  catch (error) {
+    console.log("Error in /api/reports: ", error)
+    res.json("error")
+  }
 
-    const chatData = {
-      userName : userName,
-      messageContent : messageContent,
-      roomName : roomName
-    }
+});
 
-    socket.broadcast.emit('updateChat',JSON.stringify(chatData))
+// placeholder for directions
 
-    // we tell the client to execute 'new message'
-    // socket.broadcast.emit('updateChat',{
-    //   username: data.username,
-    //   message: data.messageContent,
-    //   roomName: data.roomName
-    // });
-	
-	console.log('message: %s', data);
-  });
+const directions = [
+  {
+    bin: "MFG133A",
+    directions: ["Step 1", "Step 2"]
+  },
+  {
+    bin: "MFG134B",
+    directions: ["Step 1", "Step 2"]
+  }
+]
 
-  // when the client emits 'add user', this listens and executes
-  socket.on('add user', (username) => {
-    if (addedUser) return;
+app.put('/api/directions', (req, res) => {
+  console.log('api/directions called PUT')
+  let bin = req.body
+  console.log("checking bin", bin);
+  let result = directions.find(x => x.bin == bin.report.bin)
+  console.log("Result: ", result);
 
-    // we store the username in the socket session for this client
-    socket.username = username;
-    ++numUsers;
-    addedUser = true;
-    socket.emit('login', {
-      numUsers: numUsers
-    });
-    // echo globally (all clients) that a person has connected
-    socket.broadcast.emit('user joined', {
-      username: socket.username,
-      numUsers: numUsers
-    });
-  });
+  // return message is directions for a BIN aren't found
+  if (result == undefined ) {
+    console.log(`Unable to find tool directions for: ${req.body.report}`)
+    result = { bin: `${req.body.report}`, directions: "Unable to find tool directions!", status: "401"}
+    res.json(result)
+  }
 
-  // when the client emits 'typing', we broadcast it to others
-  socket.on('typing', () => {
-    socket.broadcast.emit('typing', {
-      username: socket.username
-    });
-  });
+  // add a status code to compare later
+  else {
+    result.directions[req.body.report.step] = req.body.report.directions
+    result.status = "200"
+    res.json(result);
 
-  // when the client emits 'stop typing', we broadcast it to others
-  socket.on('stop typing', () => {
-    socket.broadcast.emit('stop typing', {
-      username: socket.username
-    });
-  });
+  }
+});
 
-  // when the user disconnects.. perform this
-  socket.on('disconnect', () => {
-    if (addedUser) {
-      --numUsers;
+app.post('/api/directions', (req, res) => {
+  console.log('api/directions called POST')
+  let bin = req.body
+  let result = directions.find(x => x.bin == bin.report)
+  console.log("Result: ", result);
 
-      // echo globally that this client has left
-      socket.broadcast.emit('user left', {
-        username: socket.username,
-        numUsers: numUsers
-      });
-    }
-  });
+  // return message is directions for a BIN aren't found
+  if (result == undefined ) {
+    console.log(`Unable to find tool directions for: ${req.body.report}`)
+    result = { bin: `${req.body.report}`, directions: "Unable to find tool directions!", status: "401"}
+    res.json(result)
+  }
+
+  // add a status code to compare later
+  else {
+    result.status = "200"
+    res.json(result);
+
+  }
+});
+
+// required binders for server; leave alone
+app.get('/', (req,res) => {
+  res.sendFile(process.cwd() + '/my-app/dist/index.html');
+});
+
+app.listen(port, () => {
+    console.log(`Server listening on the port::${port}`);
 });
